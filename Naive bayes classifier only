@@ -1,0 +1,206 @@
+#import libraries we will use
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import nltk 
+import seaborn as sb
+import re
+import os
+import statistics
+
+
+#read in data 
+mydata= pd.read_csv('/Users/martingwarada/Desktop/Texas Last Statement.csv', encoding ='latin1')
+
+#lets see all variables and their data type 
+mydata.info()
+
+# brief description of data 
+mydata.describe()
+
+
+#create new variable gender 0 is female 1 IS MALE
+mydata['Gender'] = 0
+genderList = [1 if i==1 else 0 for i in mydata.MaleVictim]
+mydata.Gender=genderList
+
+
+#DROP  observation if any of the variables has missing information 
+mydata.dropna(inplace=True)
+
+#age Distribution of criminals
+plt.figure(figsize=(12,7))
+plt.title('Age distribution of offenders')
+sb.boxplot(mydata.Age)
+plt.show()
+print('The youngest offender is'+ ' '+ str(min(mydata.Age)))
+print('The oldest offender is'+ ' '+ str(max(mydata.Age)))
+print('The average age for an offender is'+ ' '+ str(int(mydata.Age.mean())))
+
+#race Distribution of criminals
+
+
+mydata['Race'].value_counts().plot(kind='bar') 
+plt.show()
+
+
+#most common last name for offenders
+mydata['LastName'].value_counts().head(10)
+
+#most common first name for offenders
+mydata['FirstName'].value_counts().head(10)
+
+
+#offenders by gender
+mydata['Gender'].value_counts()
+
+print('There are'+ ' '+ str(mydata['Gender'].value_counts()[0])+ ' women'+ ' ' + 'and ' + str(mydata['Gender'].value_counts()[1])+ ' men.')
+
+
+#education  Distribution for criminals
+
+
+mydata['EducationLevel'].value_counts().plot(kind='bar') 
+plt.show()
+
+#number of victims assaulted by offenders
+mydata['NumberVictim'].value_counts().plot(kind='bar') 
+
+plt.show()
+mydata['NumberVictim'].value_counts()
+
+print('Most of the offenders had committed crime against'+' '+ str(statistics.mode(mydata['NumberVictim']))+' '+ 'victims')
+
+
+#number of crimes offenders had committed before latest offense
+mydata['PreviousCrime'].value_counts().plot(kind='bar') 
+
+plt.show()
+mydata['PreviousCrime'].value_counts()
+
+print('Most of the offenders had committed '+' '+ str(statistics.mode(mydata['NumberVictim']))+' '+ 'crimes before the current crime')
+
+
+# age distribution of offenders by race
+mydata['Age'].hist(by=mydata['Race'])
+plt.show()
+
+
+#drop variables not important in nlp prediction
+mydata.drop(["Execution","TDCJNumber","PreviousCrime","Codefendants","NumberVictim","WhiteVictim","HispanicVictim","BlackVictim","VictimOther Races",],axis=1, inplace=True)
+
+
+#drop variables not important in nlp prediction
+mydata.drop(["FemaleVictim","MaleVictim"],axis=1,inplace=True)
+
+
+# lets delete non alphabetic characters in our data 
+import re
+
+first_lastStatement = mydata.LastStatement[0]
+lastStatement = re.sub("[^a-zA-Z]"," ",first_lastStatement)
+
+#import nltk libraries
+# stopwords - helps to remove stowords like the a an in 
+# punkt
+# tokenize- split sentences into words 
+###punkt ###
+#tokenizer divides a text into a list of sentences
+#by using an unsupervised algorithm to build a model for abbreviation
+#words, collocations, and words that start sentences.  It must be
+#trained on a large collection of plaintext in the target language
+#before it can be used.
+# Corpora is a group presenting multiple collections of text documents. 
+# A single collection is called corpus
+
+nltk.download('stopwords')
+nltk.download('punkt')
+from nltk.corpus import stopwords
+
+lastStatement = nltk.word_tokenize(lastStatement)
+lastStatement
+
+# lets remove stop words like the a is in etc
+
+lastStatement = [i for i in lastStatement if not i in set(stopwords.words("english"))]
+print(lastStatement)
+
+#Lematization  Lemmatization is similar to stemming but it brings context to the words. So it links words with similar meaning to one word.
+nltk.download('wordnet')
+import nltk as nlp
+lemmatization = nlp.WordNetLemmatizer()
+lastStatement= [lemmatization.lemmatize(i) for i in lastStatement]
+print(lastStatement)
+
+#turn last statement into sentence again
+lastStatement = " ".join(lastStatement)
+
+#do the above steps for each convict/statement
+statementList = list()
+
+for statement in mydata.LastStatement:
+    statement = re.sub("[^a-zA-Z]"," ",statement)
+    statement = statement.lower()
+    statement = nltk.word_tokenize(statement)
+    statement = [i for i in statement if not i in set(stopwords.words("english"))]
+    statement = [lemmatization.lemmatize(i)for i in statement]
+    statement = " ".join(statement)
+    statementList.append(statement)
+    
+    
+
+from sklearn.feature_extraction.text import CountVectorizer
+
+max_features = 50
+co
+sparce_matrix = count_vectorizer.fit_transform(statementList)
+sparce_matrix = sparce_matrix.toarray()
+
+print("Most Frequent {} Words: {}".format( max_features,count_vectorizer.get_feature_names()))
+
+
+mydata_3 = pd.DataFrame(sparce_matrix , columns=count_vectorizer.get_feature_names() )
+mydata_3.sum().sort_values(ascending=False)
+
+
+#set dependent variable to gender  and the sparce matrix to x/explanatory variables
+#The iloc indexer for Pandas Dataframe is used for integer-location 
+#based indexing / selection by position.
+
+y= mydata.iloc[:,9]
+x= mydata_3
+
+
+
+#get training and test dataset ; use naive bayes to model relationship
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import GaussianNB
+
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.05, random_state = 42)
+
+#naive bayes works on Bayes theorem of probability to predict the class of unknown data set with an assumption of independence among predictors
+#GaussianNB: It is used in classification and it assumes that features follow a normal distribution.
+nb = GaussianNB()
+nb.fit(x_train, y_train)
+
+
+
+# make a Prediction
+y_pred = nb.predict(x_test)
+
+
+# adding age to the sparce matrix
+mydata2 = pd.DataFrame(sparce_matrix)
+mydata2["Age"] = mydata.Age
+mydata2["Age"].fillna((mydata2["Age"].mean()),inplace=True)
+
+# Normalization
+x2 = (mydata2 - np.min(mydata2)) / (np.max(mydata2) - np.min(mydata2)).values
+
+x_train2, x_test2, y_train2, y_test2 = train_test_split(x2, y, test_size = 0.05, random_state = 42)
+
+nb = GaussianNB()
+nb.fit(x_train2, y_train2)
+
+# Prediction
+y_pred2= nb.predict(x_test2)
